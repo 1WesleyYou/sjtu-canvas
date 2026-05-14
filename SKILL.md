@@ -4,6 +4,9 @@ description: |
   SJTU Canvas LMS 课程助手（Claude Code Edition）。管理上海交通大学 Canvas (oc.sjtu.edu.cn) 课程数据。
   也适用于其他基于 Canvas LMS 的高校，修改 base_url 即可。
   Fork of xhh678876/sjtu-canvas with Claude Code adaptation by 1WesleyYou.
+  ⚠️ 摘要原则: 所有"汇总/总结/看看最近"类请求必须按 DDL 时序输出，
+  最紧急的放最前；每条必须写"要做什么+什么时候+链接"，而不是只贴标题；
+  详见 SKILL.md 的"🎯 摘要原则"段落。
   触发场景:
   (1) 跨课程近期动向摘要(公告/新作业/讨论/评分变化, activity_stream)
   (1b) 跨课程公告汇总(all_announcements, 支持按时间窗筛选)
@@ -138,14 +141,92 @@ cd ~/.claude/skills/sjtu-canvas && python3 scripts/calendar_sync.py
 
 自动创建日历分类，已存在的事件不会重复创建。通过 iCloud 同步到 iPhone。
 
+## 🎯 摘要原则（重要 — 所有总结类输出必须遵守）
+
+当用户问"看看最近 Canvas 上有什么"、"汇总公告"、"看一下动向"、"这周要做什么"等类似问题时，**必须按以下规则组织输出**：
+
+### 1. 时序优先：最紧急的放最前
+
+按"距离 DDL/到期时间的远近"排序，**越早需要做的越在前面**。具体优先级：
+
+```
+🚨 P0 - 24 小时内截止 / 已逾期
+🔴 P1 - 本周内截止（1-7 天）
+🟡 P2 - 下周到下个月（8-30 天）
+🟢 P3 - 一个月以上 / 仅信息性公告
+ℹ️  P4 - 学院行政类 / 与个人无关的通知
+```
+
+### 2. 行动导向：突出"要做什么"而非"发生了什么"
+
+每条不要只是标题，要写清：
+- **要做的动作**（提交 / 报名 / 查看 / 选课组 / 参加考试 ...）
+- **截止时间**（精确到日期 + 时间）
+- **链接 / 课程 ID**（方便用户立即点进去）
+
+❌ 不好的输出：
+```
+ECE4500: Step 1 Project preference form by 11:59am, May 15
+```
+
+✅ 好的输出：
+```
+🚨 明天 (5/15) 11:59am 截止
+   ECE4500 | 提交 Project Preference Form (Step 1)
+   ⚠️ 注意：使用 Updated 版项目信息，不是最初版
+   → https://oc.sjtu.edu.cn/courses/92381/...
+```
+
+### 3. 分组结构
+
+输出格式遵循以下结构：
+
+```
+🚨 紧急 (24h / 逾期)        ← 用户首先看到这块
+    └─ [每条都明确写 "做什么" + "什么时候" + "链接"]
+
+🔴 本周到期 (1-7 天)
+    └─ ...
+
+🟡 短期内 (8-30 天)
+    └─ ...
+
+🟢 信息性 / 长期
+    └─ ...
+
+ℹ️ 学院行政 (折叠或单独一段, 不与课程混在一起)
+    └─ ...
+```
+
+### 4. 数据源整合
+
+做"近期动向摘要"时要整合至少 3 个数据源，**按优先级排序后再展示**：
+
+1. `get_all_upcoming_ddls()` — 真正的截止时间，权重最高
+2. `all_announcements(since_days=N)` — 公告（提取里面的时间敏感词）
+3. `recent_activity(per_page=N)` — activity_stream 兜底（含评分变化、新作业创建等）
+
+合并时去重（同一个事件可能在多个源都出现），用 `posted_at` / `due_at` 做时间比较。
+
+### 5. 同时给"建议"
+
+摘要末尾可以加一句"我建议你最先做 X、然后 Y"，但不要超过 3 条，且必须对应上面列出的 P0/P1 项。
+
+---
+
 ## 工作流
 
 ### 1. 每日 / 每周课程动向摘要（本 fork 主要场景）
 
-1. `recent_activity()` 拉跨课程动向流
-2. `get_all_upcoming_ddls()` 列出未来 DDL + 提交状态
-3. `recent_files(cid, since_days=7)` 列出近期 slides 更新
-4. LLM 整合为 Markdown 摘要
+**目标**：让用户在 30 秒内知道"我现在最该做什么"。
+
+执行步骤：
+1. `get_all_upcoming_ddls()` — 拿到带 due_at 的硬截止时间列表（最高权威）
+2. `all_announcements(since_days=7)` — 公告流，提取时间敏感词（"by"、"due"、"截止"、"deadline"）
+3. `recent_activity(per_page=30)` — 兜底，捕捉评分变化、新发布的作业等
+4. **合并 + 去重 + 按时序排序**（见上面"摘要原则"）
+5. 用 P0/P1/P2/P3/P4 分组输出
+6. 末尾给 1-3 条"建议优先做"
 
 ### 2. Syllabus 智能定位
 
