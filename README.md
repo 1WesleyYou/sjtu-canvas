@@ -22,6 +22,7 @@
 |---|---|
 | 🌊 **近期动向流** | 跨所有课程的 activity_stream（公告/新作业/讨论/评分变化），一眼看完最近发生了什么 |
 | 📢 **跨课程公告汇总** | 拉所有 active 课程的 announcements，支持按时间窗筛选（近 N 天），含作者/链接/HTML body |
+| 🧠 **Agent Memory** | 把作业/公告状态记录到 `state/memory.json`，单 JSON 文件、原子写。三层结构：`_canvas` (Canvas 真相) + `derived` (自动算 P0/P1) + `local` (你的标注)。Canvas 是 source of truth，本地只做 overlay |
 | 📂 **课件管理** | 查看、下载、批量下载课程文件（PPT/PDF/DOCX）；按时间窗筛选近期更新 |
 | 📄 **Syllabus 智能定位** | 自动搜索 `*syllabus*.pdf` 文件（适配 SJTU JI 习惯） |
 | 🧠 **AI 课件总结** | 提取课件内容为 Markdown，配合 AI 生成学习笔记 |
@@ -116,6 +117,17 @@ python3 scripts/canvas_api.py syllabus         # 各课 syllabus PDF
 python3 scripts/canvas_api.py recent           # 近 7 天更新的课件
 python3 scripts/canvas_api.py recent 3         # 近 3 天更新的课件
 
+# 跨课程公告汇总
+python3 scripts/canvas_api.py announcements    # 全部
+python3 scripts/canvas_api.py announcements 7  # 近 7 天
+
+# Agent Memory（state/memory.json）
+python3 scripts/canvas_api.py sync                   # 从 Canvas 同步到本地
+python3 scripts/canvas_api.py pending                # 看未完成的事（7 天窗口）
+python3 scripts/canvas_api.py pending 21             # 21 天窗口
+python3 scripts/canvas_api.py mark <slug> completed  # 标记作业完成
+python3 scripts/canvas_api.py mark <slug> acted_on   # 标记公告已处理
+
 # 课件提取
 python3 scripts/file_extractor.py path/to/lecture.pptx
 
@@ -144,6 +156,14 @@ recent_files(course_id, since_days=7)   # 近 N 天更新的文件
 find_syllabus(course_id)                # 搜索 syllabus PDF
 list_announcements(course_id)           # 单门课公告
 all_announcements(since_days=7)         # 跨课程公告汇总
+sync_state()                            # 拉 Canvas 数据到 state/memory.json
+
+# Agent memory（独立模块 state.py）
+import state
+s = state.load_state()
+state.list_pending_assignments(s, days_window=7)
+state.list_pending_announcements(s, since_days=30)
+state.mark_status(slug, "completed", notes="备注")
 ```
 
 ## 🏗️ 项目结构
@@ -155,8 +175,11 @@ sjtu-canvas/
 ├── config.example.json   # 配置模板
 ├── config.json           # 你的实际配置（gitignored）
 ├── LICENSE
+├── state/                # Agent memory (gitignored)
+│   └── memory.json       # 作业/公告状态本地存档
 └── scripts/
-    ├── canvas_api.py     # Canvas API 核心 + 新增 activity/syllabus/recent 函数
+    ├── canvas_api.py     # Canvas API 核心 + 新增 activity/syllabus/recent/sync 函数
+    ├── state.py          # Agent memory: load/save/merge/mark
     ├── file_extractor.py # 课件提取器（PPT/PDF/DOCX → Markdown）
     └── calendar_sync.py  # DDL → Apple Calendar 同步（macOS）
 ```

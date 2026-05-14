@@ -10,6 +10,7 @@ description: |
   触发场景:
   (1) 跨课程近期动向摘要(公告/新作业/讨论/评分变化, activity_stream)
   (1b) 跨课程公告汇总(all_announcements, 支持按时间窗筛选)
+  (1c) Agent Memory: 本地追踪作业/公告状态(sync/pending/mark, state/memory.json)
   (2) 查看/下载课程文件(PPT/PDF)、批量下载课件
   (3) 近 N 天 slides 更新筛选
   (4) Syllabus 自动定位(适配 SJTU JI 习惯, 搜索 *syllabus*.pdf)
@@ -269,6 +270,35 @@ ECE4500: Step 1 Project preference form by 11:59am, May 15
 1. 确认课程 ID、作业 ID、本地文件
 2. `submit_assignment()` 提交
 3. **提交前必须向用户确认**
+
+## Agent Memory (state/memory.json)
+
+本 fork 新增的轻量级状态层，三层结构：
+
+```
+_canvas  ← Canvas 拉来的真实数据（sync 时整块覆盖）
+derived  ← 自动算出的字段（priority, has_action）每次 sync 重算
+local    ← 用户/agent 标注（status, notes, blockers）sync 永远不动它
+```
+
+工作流：
+1. `python3 scripts/canvas_api.py sync` — 把所有作业/公告同步到本地
+2. `python3 scripts/canvas_api.py pending [DAYS]` — 看未完成的事（按 P0/P1/P2 排序）
+3. `python3 scripts/canvas_api.py mark <slug> <status>` — 改本地状态
+   - 作业: pending / in_progress / completed / skipped / blocked
+   - 公告: unseen / seen / pending / acted_on / dismissed
+
+Python API：
+
+```python
+import state
+s = state.load_state()
+a_list = state.list_pending_assignments(s, days_window=7)
+n_list = state.list_pending_announcements(s, since_days=30)
+state.mark_status("ECE4500_step_1_...", "acted_on", "已提交")
+```
+
+slug 命名规则: `<COURSE_SHORT>_<TITLE_KEBAB>`, e.g. `ME4950_2_individual_report`。
 
 ## 注意事项
 

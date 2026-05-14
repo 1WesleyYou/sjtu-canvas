@@ -1,3 +1,7 @@
 config.json
 __pycache__/
 *.pyc
+
+# Agent memory（含个人作业/公告状态，不进 git）
+state/
+.memory.*.json.tmp

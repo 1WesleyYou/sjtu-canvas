@@ -293,6 +293,42 @@ def get_all_upcoming_ddls():
     ddls.sort(key=lambda x: x["due_at"])
     return ddls
 
+# ===== Agent Memory 同步 =====
+def sync_state():
+    """从 Canvas 拉所有作业 + 公告，合并到本地 state/memory.json。
+    Canvas → _canvas 字段（整块覆盖），local 字段永远不动。"""
+    import state as _state
+
+    s = _state.load_state()
+    a_count = 0
+    n_count = 0
+    courses = list_courses()
+    for c in courses:
+        cid = c["id"]
+        cname = c.get("name", f"course_{cid}")
+        # 作业（"Undergraduate Students" 行政频道无作业，跳过）
+        if cname != "Undergraduate Students":
+            try:
+                for a in list_assignments(cid):
+                    a["course_id"] = cid
+                    _state.merge_assignment(s, a, cname)
+                    a_count += 1
+            except Exception as e:
+                print(f"  ⚠️  {cname} assignments: {e}")
+        # 公告
+        try:
+            for ann in list_announcements(cid):
+                ann["course_id"] = cid
+                _state.merge_announcement(s, ann, cname)
+                n_count += 1
+        except Exception as e:
+            print(f"  ⚠️  {cname} announcements: {e}")
+
+    s["_meta"]["last_full_sync"] = datetime.now(timezone.utc).isoformat()
+    _state.save_state(s)
+    return {"assignments": a_count, "announcements": n_count, "path": str(_state.get_state_path())}
+
+
 # ===== 动向流 =====
 def recent_activity(per_page=30):
     """跨所有课程的近期动向流（公告 / 新作业 / 讨论 / 评分变化等）。
@@ -368,7 +404,66 @@ if __name__ == "__main__":
                 last_course = a["course_name"]
             date = (a["posted_at"] or "")[:10]
             print(f"  [{date}] [{a['author'][:18]:18s}] {a['title'][:60]}")
+    elif cmd == "sync":
+        import state as _state
+        print("=== 从 Canvas 同步到本地 memory ===")
+        stats = sync_state()
+        print(f"  ✅ 作业: {stats['assignments']} 条")
+        print(f"  ✅ 公告: {stats['announcements']} 条")
+        print(f"  📂 文件: {stats['path']}")
+    elif cmd == "pending":
+        import state as _state
+        days = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+        # 公告窗口默认放宽到作业窗口 × 4，但至少 30 天
+        ann_days = max(days * 4, 30)
+        s = _state.load_state()
+        a_list = _state.list_pending_assignments(s, days_window=days)
+        n_list = _state.list_pending_announcements(s, since_days=ann_days)
+        print(f"=== 近 {days} 天未完成作业 ({len(a_list)} 条) ===")
+        for slug, item, due in a_list:
+            prio = item["derived"]["priority"]
+            course = item["_canvas"]["course_name"]
+            title = item["_canvas"]["title"]
+            wfs = item["_canvas"].get("workflow_state", "")
+            print(f"  {prio} [{course}] {title}")
+            print(f"      due: {due.strftime('%Y-%m-%d %H:%M')}  canvas_state: {wfs or '-'}")
+            print(f"      slug: {slug}")
+        print(f"\n=== 待处理公告 ({len(n_list)} 条) ===")
+        for slug, item in n_list:
+            course = item["_canvas"]["course_name"]
+            title = item["_canvas"]["title"]
+            author = item["_canvas"]["author"]
+            posted = (item["_canvas"].get("posted_at") or "")[:10]
+            print(f"  [{posted}] [{course}] {title}  (by {author})")
+            print(f"      slug: {slug}")
+    elif cmd == "mark":
+        if len(sys.argv) < 4:
+            print("Usage: canvas_api.py mark <slug> <status> [notes]")
+            print("  assignment status: pending|in_progress|completed|skipped|blocked")
+            print("  announcement status: unseen|seen|pending|acted_on|dismissed")
+            sys.exit(1)
+        import state as _state
+        slug = sys.argv[2]
+        status = sys.argv[3]
+        notes = sys.argv[4] if len(sys.argv) > 4 else ""
+        r = _state.mark_status(slug, status, notes)
+        if r:
+            print(f"✅ {r['kind']} {slug} → {status}")
+        else:
+            print(f"❌ slug not found: {slug}")
+            sys.exit(1)
     else:
         print(f"Unknown command: {cmd}")
-        print("Usage: canvas_api.py {courses|ddls|grades|me|activity [N]|syllabus|recent [DAYS]}")
+        print("Usage: canvas_api.py <command> [args]")
+        print("  courses              课程列表")
+        print("  me                   当前用户")
+        print("  ddls                 所有未来 DDL")
+        print("  grades               已出成绩")
+        print("  activity [N]         近期动向流（默认 30 条）")
+        print("  syllabus             各课 syllabus PDF")
+        print("  recent [DAYS]        近 N 天更新的课件（默认 7）")
+        print("  announcements [DAYS] 跨课公告汇总（不带参数 = 全部）")
+        print("  sync                 拉 Canvas 数据到本地 memory")
+        print("  pending [DAYS]       看 memory 里未完成的事（默认 7）")
+        print("  mark <slug> <status> 改一条 item 的本地状态")
         sys.exit(1)
