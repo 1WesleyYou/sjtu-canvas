@@ -21,6 +21,7 @@
 | 功能 | 说明 |
 |---|---|
 | 🌊 **近期动向流** | 跨所有课程的 activity_stream（公告/新作业/讨论/评分变化），一眼看完最近发生了什么 |
+| 📢 **跨课程公告汇总** | 拉所有 active 课程的 announcements，支持按时间窗筛选（近 N 天），含作者/链接/HTML body |
 | 📂 **课件管理** | 查看、下载、批量下载课程文件（PPT/PDF/DOCX）；按时间窗筛选近期更新 |
 | 📄 **Syllabus 智能定位** | 自动搜索 `*syllabus*.pdf` 文件（适配 SJTU JI 习惯） |
 | 🧠 **AI 课件总结** | 提取课件内容为 Markdown，配合 AI 生成学习笔记 |
@@ -141,6 +142,8 @@ submit_assignment(cid, aid, [paths])    # 提交作业
 recent_activity(per_page=30)            # 跨课程动向流
 recent_files(course_id, since_days=7)   # 近 N 天更新的文件
 find_syllabus(course_id)                # 搜索 syllabus PDF
+list_announcements(course_id)           # 单门课公告
+all_announcements(since_days=7)         # 跨课程公告汇总
 ```
 
 ## 🏗️ 项目结构

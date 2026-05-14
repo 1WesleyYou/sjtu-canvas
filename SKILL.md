@@ -6,6 +6,7 @@ description: |
   Fork of xhh678876/sjtu-canvas with Claude Code adaptation by 1WesleyYou.
   触发场景:
   (1) 跨课程近期动向摘要(公告/新作业/讨论/评分变化, activity_stream)
+  (1b) 跨课程公告汇总(all_announcements, 支持按时间窗筛选)
   (2) 查看/下载课程文件(PPT/PDF)、批量下载课件
   (3) 近 N 天 slides 更新筛选
   (4) Syllabus 自动定位(适配 SJTU JI 习惯, 搜索 *syllabus*.pdf)
@@ -18,7 +19,7 @@ description: |
   (11) DDL预警提醒
   (12) 期末复习包生成(所有课件→Markdown)
   (13) 一键提交作业
-  触发词: Canvas, 课程, 作业, DDL, 截止, 成绩, 课件, slides, PPT, syllabus, 大纲, 动向, 近期, 最近, 总结, 复习, 提交作业, 讨论区, course, assignment, grade, activity, recent
+  触发词: Canvas, 课程, 作业, DDL, 截止, 成绩, 课件, slides, PPT, syllabus, 大纲, 动向, 近期, 最近, 公告, announcement, 通知, 总结, 复习, 提交作业, 讨论区, course, assignment, grade, activity, recent
 ---
 
 # SJTU Canvas 课程助手 (Claude Code Edition)
@@ -86,6 +87,10 @@ python3 scripts/canvas_api.py syllabus
 # 近 N 天更新的课件（本 fork 新增）
 python3 scripts/canvas_api.py recent          # 默认 7 天
 python3 scripts/canvas_api.py recent 3        # 指定天数
+
+# 跨课程公告汇总（本 fork 新增）
+python3 scripts/canvas_api.py announcements     # 全部
+python3 scripts/canvas_api.py announcements 7   # 近 7 天
 ```
 
 Python 中调用：
@@ -109,6 +114,8 @@ submit_assignment(cid, aid, [paths])    # 提交作业（已修复 upstream Synt
 recent_activity(per_page=30)            # 跨课程动向流
 recent_files(course_id, since_days=7)   # 近 N 天更新的文件
 find_syllabus(course_id)                # 搜索 syllabus PDF
+list_announcements(course_id)           # 单门课公告列表
+all_announcements(since_days=7)         # 跨课程公告汇总
 ```
 
 ### file_extractor.py — 课件内容提取

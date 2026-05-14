@@ -209,6 +209,51 @@ def get_course_grades(course_id):
         })
     return results
 
+# ===== 公告 / Announcements =====
+def list_announcements(course_id):
+    """单门课的公告列表（按 posted_at 倒序，含作者、HTML body）。
+    走 discussion_topics?only_announcements=true，
+    比 /api/v1/announcements 端点更稳定（后者多课查询在某些 Canvas 实例会 500）。"""
+    return api_get(
+        f"/api/v1/courses/{course_id}/discussion_topics",
+        {"only_announcements": "true", "per_page": 50},
+    )
+
+def all_announcements(since_days=None):
+    """跨所有 active 课程的公告汇总。
+    返回扁平 list，每项含 course_name / course_id / title / posted_at / author / message / url。
+    since_days=None 拉全部，否则只保留最近 N 天的。"""
+    cutoff = None
+    if since_days is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+    out = []
+    for c in list_courses():
+        cid = c["id"]
+        cname = c.get("name", "?")
+        try:
+            anns = list_announcements(cid)
+        except Exception:
+            continue
+        for a in anns:
+            posted = a.get("posted_at") or a.get("created_at")
+            if cutoff and posted:
+                try:
+                    if datetime.fromisoformat(posted.replace("Z", "+00:00")) < cutoff:
+                        continue
+                except Exception:
+                    pass
+            out.append({
+                "course_id": cid,
+                "course_name": cname,
+                "title": a.get("title", ""),
+                "posted_at": posted,
+                "author": (a.get("author") or {}).get("display_name", "?"),
+                "message": a.get("message", ""),
+                "url": a.get("html_url", ""),
+            })
+    out.sort(key=lambda x: x.get("posted_at") or "", reverse=True)
+    return out
+
 # ===== 讨论区 =====
 def list_discussions(course_id):
     return api_get(f"/api/v1/courses/{course_id}/discussion_topics", {"per_page": 50})
@@ -311,6 +356,18 @@ if __name__ == "__main__":
                 for f in files:
                     upd = (f.get("updated_at") or "")[:10]
                     print(f"  [{upd}] {f.get('display_name', '?')}")
+    elif cmd == "announcements":
+        days = int(sys.argv[2]) if len(sys.argv) > 2 else None
+        anns = all_announcements(since_days=days)
+        scope = f"近 {days} 天" if days else "全部"
+        print(f"=== {scope} announcement 共 {len(anns)} 条 ===\n")
+        last_course = None
+        for a in anns:
+            if a["course_name"] != last_course:
+                print(f"\n📚 {a['course_name']}")
+                last_course = a["course_name"]
+            date = (a["posted_at"] or "")[:10]
+            print(f"  [{date}] [{a['author'][:18]:18s}] {a['title'][:60]}")
     else:
         print(f"Unknown command: {cmd}")
         print("Usage: canvas_api.py {courses|ddls|grades|me|activity [N]|syllabus|recent [DAYS]}")
