@@ -10,14 +10,19 @@ from pathlib import Path
 
 TZ_SHANGHAI = timezone(timedelta(hours=8))
 
-# Search for config.json: script dir → skill dir → workspace skill dir
+# Search for config.json across common Claude Code skill / repo locations.
 def _find_config():
     candidates = [
+        os.environ.get("SJTU_CANVAS_CONFIG"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
+        os.path.expanduser("~/.claude/skills/sjtu-canvas/config.json"),
+        os.path.expanduser("~/Desktop/sjtu-canvas/config.json"),
         os.path.expanduser("~/.openclaw/workspace/skills/sjtu-canvas/config.json"),
     ]
     for p in candidates:
+        if not p:
+            continue
         p = os.path.normpath(p)
         if os.path.exists(p):
             return p
@@ -114,6 +119,33 @@ def download_course_files(course_id, course_name, save_dir, extensions=None):
             print(f"  ❌ {name}: {e}")
     return downloaded
 
+def recent_files(course_id, since_days=7):
+    """近 N 天更新的课程文件（按 updated_at 倒序）。
+    适合 'slides 更新' 类查询。"""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+    files = api_get(
+        f"/api/v1/courses/{course_id}/files",
+        {"per_page": 50, "sort": "updated_at", "order": "desc"},
+    )
+    recent = []
+    for f in files:
+        upd = f.get("updated_at")
+        if not upd:
+            continue
+        upd_dt = datetime.fromisoformat(upd.replace("Z", "+00:00"))
+        if upd_dt >= cutoff:
+            recent.append(f)
+    return recent
+
+def find_syllabus(course_id):
+    """搜索课程内文件名含 'syllabus' 的 PDF。
+    适配 SJTU JI 习惯：syllabus 以 PDF 形式上传，而非 Canvas syllabus_body 字段。"""
+    files = list_course_files(course_id, search_term="syllabus")
+    return [
+        f for f in files
+        if f.get("display_name", "").lower().endswith(".pdf")
+    ]
+
 # ===== 作业 =====
 def list_assignments(course_id):
     return api_get(f"/api/v1/courses/{course_id}/assignments", {"per_page": 50, "order_by": "due_at"})
@@ -134,7 +166,7 @@ def submit_assignment(course_id, assignment_id, file_paths):
         fsize = os.path.getsize(fp)
         # Step 1: 请求上传
         r = requests.post(
-            f"{get_base_url()/api/v1/courses/{course_id}/assignments/{assignment_id}/submissions/self/files",
+            f"{get_base_url()}/api/v1/courses/{course_id}/assignments/{assignment_id}/submissions/self/files",
             headers=h,
             data={"name": fname, "size": fsize}
         )
@@ -151,7 +183,7 @@ def submit_assignment(course_id, assignment_id, file_paths):
             uploaded_ids.append(r2.json()["id"])
     # Step 3: 提交
     r3 = requests.post(
-        f"{get_base_url()/api/v1/courses/{course_id}/assignments/{assignment_id}/submissions",
+        f"{get_base_url()}/api/v1/courses/{course_id}/assignments/{assignment_id}/submissions",
         headers=h,
         data={
             "submission[submission_type]": "online_upload",
@@ -216,6 +248,12 @@ def get_all_upcoming_ddls():
     ddls.sort(key=lambda x: x["due_at"])
     return ddls
 
+# ===== 动向流 =====
+def recent_activity(per_page=30):
+    """跨所有课程的近期动向流（公告 / 新作业 / 讨论 / 评分变化等）。
+    返回 Canvas activity_stream 原始事件列表，按时间倒序。"""
+    return api_get("/api/v1/users/self/activity_stream", {"per_page": per_page})
+
 # ===== 日历事件 =====
 def list_calendar_events(course_ids, start_date, end_date):
     context_codes = [f"course_{cid}" for cid in course_ids]
@@ -231,7 +269,7 @@ def list_calendar_events(course_ids, start_date, end_date):
 if __name__ == "__main__":
     import sys
     cmd = sys.argv[1] if len(sys.argv) > 1 else "courses"
-    
+
     if cmd == "courses":
         for c in list_courses():
             print(f"[{c['id']}] {c['name']}")
@@ -250,3 +288,30 @@ if __name__ == "__main__":
     elif cmd == "me":
         me = get_me()
         print(f"用户: {me['name']} (ID: {me['id']})")
+    elif cmd == "activity":
+        n = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+        for ev in recent_activity(per_page=n):
+            t = ev.get("type", "?")
+            title = (ev.get("title") or "")[:60]
+            upd = (ev.get("updated_at") or "")[:10]
+            print(f"[{upd}] {t:15s} {title}")
+    elif cmd == "syllabus":
+        for c in list_courses():
+            hits = find_syllabus(c["id"])
+            if hits:
+                print(f"\n📚 {c['name']}:")
+                for f in hits:
+                    print(f"  📄 {f['display_name']} → {f.get('url', '')[:80]}")
+    elif cmd == "recent":
+        days = int(sys.argv[2]) if len(sys.argv) > 2 else 7
+        for c in list_courses():
+            files = recent_files(c["id"], since_days=days)
+            if files:
+                print(f"\n📚 {c['name']} (近 {days} 天 {len(files)} 个更新):")
+                for f in files:
+                    upd = (f.get("updated_at") or "")[:10]
+                    print(f"  [{upd}] {f.get('display_name', '?')}")
+    else:
+        print(f"Unknown command: {cmd}")
+        print("Usage: canvas_api.py {courses|ddls|grades|me|activity [N]|syllabus|recent [DAYS]}")
+        sys.exit(1)
