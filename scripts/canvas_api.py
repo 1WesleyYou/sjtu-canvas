@@ -88,6 +88,20 @@ def list_course_files(course_id, search_term=None):
 def list_course_folders(course_id):
     return api_get(f"/api/v1/courses/{course_id}/folders", {"per_page": 100})
 
+def build_folder_map(course_id):
+    """返回 {folder_id: relative_path} 映射，剥去 Canvas 根目录前缀 'course files'。
+
+    例：full_name='course files/lecture' → 'lecture'
+        full_name='course files'         → ''（根目录）
+    """
+    folder_map = {}
+    for folder in list_course_folders(course_id):
+        full_name = folder.get("full_name", "")
+        # Strip leading root component ("course files" or equivalent)
+        rel = full_name.split("/", 1)[1] if "/" in full_name else ""
+        folder_map[folder["id"]] = rel
+    return folder_map
+
 def download_file(file_url, save_path):
     r = requests.get(file_url, headers=headers(), stream=True)
     r.raise_for_status()
@@ -97,9 +111,16 @@ def download_file(file_url, save_path):
             f.write(chunk)
     return save_path
 
-def download_course_files(course_id, course_name, save_dir, extensions=None):
-    """批量下载课程文件，可按扩展名过滤"""
+def download_course_files(course_id, course_name, save_dir, extensions=None, use_folders=True):
+    """批量下载课程文件，保留 Canvas 文件夹层级（use_folders=True，默认开启）。
+
+    目录结构示例：
+        <save_dir>/<course_name>/lecture/Lec01.pdf
+        <save_dir>/<course_name>/homework/HW01.pdf
+        <save_dir>/<course_name>/syllabus.pdf       ← 根目录文件
+    """
     files = list_course_files(course_id)
+    folder_map = build_folder_map(course_id) if use_folders else {}
     downloaded = []
     for f in files:
         name = f.get("display_name", "")
@@ -107,14 +128,15 @@ def download_course_files(course_id, course_name, save_dir, extensions=None):
             ext = os.path.splitext(name)[1].lower()
             if ext not in extensions:
                 continue
-        save_path = os.path.join(save_dir, course_name, name)
+        rel_folder = folder_map.get(f.get("folder_id"), "") if use_folders else ""
+        save_path = os.path.join(save_dir, course_name, rel_folder, name)
         if os.path.exists(save_path):
             downloaded.append(save_path)
             continue
         try:
             download_file(f["url"], save_path)
             downloaded.append(save_path)
-            print(f"  ✅ {name}")
+            print(f"  ✅ {os.path.join(rel_folder, name) if rel_folder else name}")
         except Exception as e:
             print(f"  ❌ {name}: {e}")
     return downloaded
