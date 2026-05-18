@@ -1,76 +1,90 @@
-# 📚 SJTU Canvas Agent Skill — Claude Code Edition
+# 📚 sjtu-canvas
 
-> 🍴 **Fork notice**: 此仓库 fork 自 [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas)，由 [@1WesleyYou](https://github.com/1WesleyYou) 在保留原作者所有功能基础上，做了**面向 Claude Code 的适配**和若干 bug 修复。原版基于 OpenClaw，本 fork 同时兼容 Claude Code Skill 加载机制。
+> ### 📺 「妈妈再也不用担心我的学习」
+>
+> *—— 让 Claude Code 接管 Canvas，作业 · 公告 · DDL · 课件全自动汇总，推到你的 Google Calendar / Notion / Obsidian Dashboard。*
 
-一个 **AI Agent 技能（Skill）**，赋予你的 AI Agent（Claude Code / OpenClaw / Claude Desktop）管理 Canvas LMS 课程的能力——不只是查数据，更能帮你理解课件、辅导作业、定位知识点。默认适配 **上海交通大学** Canvas (oc.sjtu.edu.cn)，修改一行配置即可兼容任何 Canvas LMS 实例。
+```text
+   ┌─────────────────────┐      ┌──────────────────┐      ┌────────────────────┐
+   │  Canvas LMS         │      │  Claude Code     │      │  Google Calendar   │
+   │  oc.sjtu.edu.cn     │ ───▶ │  · OpenCode      │ ───▶ │  Notion DB         │
+   │  作业/公告/DDL/课件 │      │  (sjtu-canvas)   │      │  Obsidian Dashboard│
+   └─────────────────────┘      └──────────────────┘      └────────────────────┘
+            数据源                  统一 AI 入口                可视化输出
+```
 
-## 🆚 Fork 与原版差异
+> 默认配置 SJTU（`oc.sjtu.edu.cn`），改一行 `base_url` 兼容任何 Canvas LMS。
+> 🍴 Fork of [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas) —— 修了 upstream 的 `submit_assignment` SyntaxError、加了跨课程动向/公告汇总、agent memory、syllabus 自动定位。
 
-| 项 | 原版 (xhh678876) | 本 fork (1WesleyYou) |
-|---|---|---|
-| **Agent 平台** | OpenClaw | Claude Code + OpenClaw 双兼容 |
-| **配置查找路径** | `~/.openclaw/workspace/...` 单一路径 | 多路径搜索（含 `~/.claude/skills/`、`~/Desktop/`、`SJTU_CANVAS_CONFIG` 环境变量） |
-| **`submit_assignment()`** | 含 f-string `SyntaxError`，模块无法 import | ✅ 已修复 |
-| **近期动向摘要** | 无 | ✅ 新增 `recent_activity()` 包装 Canvas activity_stream |
-| **Syllabus 拉取** | 仅查 Canvas `syllabus_body` 字段（SJTU JI 不用此字段） | ✅ 新增 `find_syllabus()`：搜索文件名含 "syllabus" 的 PDF |
-| **近期文件过滤** | 无 | ✅ 新增 `recent_files(course_id, since_days)`：按更新时间窗过滤 |
-| **CLI 子命令** | `courses` `ddls` `grades` `me` | + `activity` `syllabus` `recent` |
+## 🎒 它能干啥
 
-## ✨ 功能一览
-
-| 功能 | 说明 |
+| 模块 | 一句话 |
 |---|---|
-| 🌊 **近期动向流** | 跨所有课程的 activity_stream（公告/新作业/讨论/评分变化），一眼看完最近发生了什么 |
-| 📢 **跨课程公告汇总** | 拉所有 active 课程的 announcements，支持按时间窗筛选（近 N 天），含作者/链接/HTML body |
-| 🧠 **Agent Memory** | 把作业/公告状态记录到 `state/memory.json`，单 JSON 文件、原子写。三层结构：`_canvas` (Canvas 真相) + `derived` (自动算 P0/P1) + `local` (你的标注)。Canvas 是 source of truth，本地只做 overlay |
-| 📂 **课件管理** | 查看、下载、批量下载课程文件（PPT/PDF/DOCX）；按时间窗筛选近期更新 |
-| 📄 **Syllabus 智能定位** | 自动搜索 `*syllabus*.pdf` 文件（适配 SJTU JI 习惯） |
-| 🧠 **AI 课件总结** | 提取课件内容为 Markdown，配合 AI 生成学习笔记 |
-| 🎯 **作业辅导** | 自动提取作业要求，匹配相关课件，定位对应知识点，给出解题思路 |
-| 📝 **DDL 追踪** | 一键查看所有课程的未来截止时间 |
-| ⏰ **日历同步** | 将 DDL 同步到 Apple 日历，iCloud 自动推送到 iPhone（仅 macOS） |
-| 📊 **成绩查询** | 查看各科已出成绩，计算均分 |
-| 💬 **讨论区** | 获取课程讨论区内容和摘要 |
-| 🚀 **提交作业** | 直接从命令行提交作业文件（已修复 upstream 的 SyntaxError） |
-| 📦 **复习包** | 批量导出所有课件为 Markdown，导入 NotebookLM 复习 |
+| 🌊 **近期动向流** | 跨所有课程拉 activity_stream（公告 / 新作业 / 讨论 / 评分变化），一次看完最近发生了什么 |
+| 📢 **跨课程公告汇总** | 把所有 active 课程的 announcements 按时间窗（近 N 天）聚合 |
+| 🧠 **Agent Memory** | 作业/公告状态本地存档（`state/memory.json`）。Canvas 是 source of truth，本地只做 overlay |
+| 📂 **课件管理** | 查看 · 下载 · 批量下载课程文件（PPT/PDF/DOCX），支持近 N 天更新筛选 |
+| 📄 **Syllabus 智能定位** | 自动搜 `*syllabus*.pdf`（适配 SJTU JI 习惯） |
+| 🧠 **AI 课件总结** | PPT/PDF 提取为 Markdown，喂给 AI 出学习笔记 |
+| 🎯 **作业辅导** | 自动抓作业要求 + 匹配课件内容 → 给思路 |
+| 📝 **DDL 追踪** | 一条命令列出所有未来截止 |
+| ⏰ **日历同步** | DDL → Apple 日历（macOS），自动 iCloud 推到 iPhone |
+| 📊 **成绩查询** | 各科已出成绩 + 计算均分 |
+| 💬 **讨论区摘要** | 抓课程讨论区内容 |
+| 🚀 **提交作业** | 命令行直接交（已修 upstream 的 SyntaxError） |
+| 📦 **复习包** | 批量导出所有课件为 Markdown，导入 NotebookLM / Obsidian 复习 |
 
-## 🚀 安装
+## 🛣️ Roadmap
 
-### 方式 A：Claude Code Skill（本 fork 推荐）
+| 集成 | 状态 |
+|---|---|
+| Apple Calendar（macOS，osascript） | ✅ shipped |
+| Claude Code skill 加载 | ✅ shipped |
+| OpenCode 兼容（via `$SJTU_CANVAS_CONFIG`） | ✅ 已兼容 |
+| Google Calendar API 同步 | 🚧 设计中 |
+| Notion DB 自动同步（via MCP） | 🚧 设计中 |
+| Obsidian Daily Note 注入 | 🚧 设计中 |
+| 跨 harness 通知（LINE / Telegram / 邮件） | 💭 在想 |
+
+> 想优先看到哪个？提 issue 或直接 PR。
+
+## 🚀 三分钟接管你的学期
+
+### 1. Clone 到 Claude Code skills 目录
 
 ```bash
 git clone https://github.com/1WesleyYou/sjtu-canvas.git ~/.claude/skills/sjtu-canvas
 cd ~/.claude/skills/sjtu-canvas
-cp config.example.json config.json
-# 编辑 config.json 填入 token
-pip3 install python-pptx pdfplumber requests
 ```
 
-Claude Code 会自动识别 `SKILL.md` 的 frontmatter 触发器，对话中说"看一下我 Canvas 这周的动向"即可激活。
-
-### 方式 B：放任意目录 + 环境变量
+或者放任意目录，然后用环境变量指向 config：
 
 ```bash
 git clone https://github.com/1WesleyYou/sjtu-canvas.git ~/Desktop/sjtu-canvas
-cd ~/Desktop/sjtu-canvas
-cp config.example.json config.json
-# 编辑 config.json
 export SJTU_CANVAS_CONFIG=~/Desktop/sjtu-canvas/config.json
 ```
 
-### 方式 C：原版 OpenClaw（保留兼容）
+### 2. 填配置
 
 ```bash
-clawhub install sjtu-canvas
-# 或手动 clone 到 ~/.openclaw/workspace/skills/sjtu-canvas
+cp config.example.json config.json
+# 编辑 config.json，填入 canvas_token 和 base_url
 ```
 
-## ⚙️ 获取 Canvas API Token
+### 3. 装依赖
+
+```bash
+pip3 install python-pptx pdfplumber requests
+```
+
+完事。Claude Code 会自动读 `SKILL.md` 的 frontmatter，对话里说"看一下我 Canvas 这周的动向"就触发。
+
+## 🔑 获取 Canvas API Token
 
 1. 浏览器登录 `https://oc.sjtu.edu.cn`（校外需 SJTU VPN）
 2. 右上头像 → **Account** → **Settings**
-3. 滚动到 **Approved Integrations** → **+ New Access Token**
-4. Purpose 填随便（如 `claude-code-canvas`），Expires 留空 = 永不过期
+3. 滚到 **Approved Integrations** → **+ New Access Token**
+4. Purpose 随便填（如 `claude-code-canvas`），Expires 留空 = 永不过期
 5. 点 **Generate Token**，**立刻复制**（只显示一次）
 6. 粘贴到 `config.json` 的 `canvas_token` 字段
 
@@ -83,18 +97,18 @@ clawhub install sjtu-canvas
 }
 ```
 
-> 💡 非 SJTU 用户只需修改 `base_url` 为你学校的 Canvas 地址。
-> 🔒 `config.json` 已在 `.gitignore` 中，不会被 commit。
+> 💡 非 SJTU 用户改 `base_url` 即可。
+> 🔒 `config.json` 已在 `.gitignore`，不会被 commit。
 
-## 💬 使用方式
+## 💬 用起来长啥样
 
-### 自然语言（Claude Code / OpenClaw）
+### 自然语言（在 Claude Code / OpenCode 里直接说）
 
 ```
-"看一下我这周 Canvas 上发生了什么"     ← 触发 recent_activity
-"最近的 DDL 有哪些？"                ← 触发 get_all_upcoming_ddls
-"拉一下 ECE2150 的 syllabus"        ← 触发 find_syllabus
-"哪些课最近更新了 slides？"           ← 触发 recent_files
+"看一下我这周 Canvas 上发生了什么"     ← recent_activity
+"最近的 DDL 有哪些？"                  ← get_all_upcoming_ddls
+"拉一下 ECE2150 的 syllabus"          ← find_syllabus
+"哪些课最近更新了 slides？"            ← recent_files
 "下载 ME4950 的课件"
 "帮我总结这个 PPT 的重点"
 "这次作业考的是哪些知识点？"
@@ -102,28 +116,29 @@ clawhub install sjtu-canvas
 "把 DDL 同步到日历"
 ```
 
-### CLI 子命令
+### CLI（适合 cron / 脚本）
 
 ```bash
+# 基础
 python3 scripts/canvas_api.py courses          # 课程列表
 python3 scripts/canvas_api.py me               # 当前用户
 python3 scripts/canvas_api.py ddls             # 所有未来 DDL
 python3 scripts/canvas_api.py grades           # 已出成绩
 
-# 本 fork 新增 ↓
+# 本 fork 新增
 python3 scripts/canvas_api.py activity         # 近期动向（默认 30 条）
-python3 scripts/canvas_api.py activity 50      # 近期动向（指定条数）
+python3 scripts/canvas_api.py activity 50      # 指定条数
 python3 scripts/canvas_api.py syllabus         # 各课 syllabus PDF
-python3 scripts/canvas_api.py recent           # 近 7 天更新的课件
-python3 scripts/canvas_api.py recent 3         # 近 3 天更新的课件
+python3 scripts/canvas_api.py recent           # 近 7 天更新课件
+python3 scripts/canvas_api.py recent 3         # 近 3 天
 
 # 跨课程公告汇总
 python3 scripts/canvas_api.py announcements    # 全部
 python3 scripts/canvas_api.py announcements 7  # 近 7 天
 
-# Agent Memory（state/memory.json）
-python3 scripts/canvas_api.py sync                   # 从 Canvas 同步到本地
-python3 scripts/canvas_api.py pending                # 看未完成的事（7 天窗口）
+# Agent Memory
+python3 scripts/canvas_api.py sync                   # Canvas → state/memory.json
+python3 scripts/canvas_api.py pending                # 未完成的事（7 天窗口）
 python3 scripts/canvas_api.py pending 21             # 21 天窗口
 python3 scripts/canvas_api.py mark <slug> completed  # 标记作业完成
 python3 scripts/canvas_api.py mark <slug> acted_on   # 标记公告已处理
@@ -150,15 +165,15 @@ download_course_files(cid, name, dir)   # 批量下载
 list_discussions(course_id)             # 讨论区
 submit_assignment(cid, aid, [paths])    # 提交作业
 
-# 本 fork 新增 ↓
+# 本 fork 新增
 recent_activity(per_page=30)            # 跨课程动向流
-recent_files(course_id, since_days=7)   # 近 N 天更新的文件
-find_syllabus(course_id)                # 搜索 syllabus PDF
+recent_files(course_id, since_days=7)   # 近 N 天更新文件
+find_syllabus(course_id)                # 搜 syllabus PDF
 list_announcements(course_id)           # 单门课公告
 all_announcements(since_days=7)         # 跨课程公告汇总
-sync_state()                            # 拉 Canvas 数据到 state/memory.json
+sync_state()                            # Canvas → state/memory.json
 
-# Agent memory（独立模块 state.py）
+# Agent memory
 import state
 s = state.load_state()
 state.list_pending_assignments(s, days_window=7)
@@ -170,41 +185,41 @@ state.mark_status(slug, "completed", notes="备注")
 
 ```
 sjtu-canvas/
-├── SKILL.md              # Agent Skill 触发定义（Claude Code / OpenClaw 通用）
-├── README.md             # 本文件
+├── SKILL.md              # Skill 触发定义（Claude Code 自动加载）
+├── README.md
 ├── config.example.json   # 配置模板
 ├── config.json           # 你的实际配置（gitignored）
 ├── LICENSE
-├── state/                # Agent memory (gitignored)
-│   └── memory.json       # 作业/公告状态本地存档
+├── state/                # Agent memory（gitignored）
+│   └── memory.json
 └── scripts/
-    ├── canvas_api.py     # Canvas API 核心 + 新增 activity/syllabus/recent/sync 函数
+    ├── canvas_api.py     # Canvas API 核心 + activity/syllabus/recent/sync
     ├── state.py          # Agent memory: load/save/merge/mark
-    ├── file_extractor.py # 课件提取器（PPT/PDF/DOCX → Markdown）
-    └── calendar_sync.py  # DDL → Apple Calendar 同步（macOS）
+    ├── file_extractor.py # PPT/PDF/DOCX → Markdown
+    └── calendar_sync.py  # DDL → Apple Calendar（macOS）
 ```
 
 ## 🎓 兼容性
 
-- ✅ **Canvas LMS** — 适配任何 Canvas 实例，不限于 SJTU
-- ✅ **Claude Code / Claude Desktop** — 本 fork 原生支持
-- ✅ **OpenClaw** — 保留 upstream 兼容
-- ✅ **macOS** — Apple 日历同步（iCloud → iPhone）
-- ⚠️ 日历同步功能仅限 macOS
+- ✅ **任何 Canvas LMS 实例** —— 改 `base_url` 即可
+- ✅ **Claude Code / Claude Desktop** —— 原生支持 SKILL.md
+- ✅ **OpenCode** —— 兼容（用 `$SJTU_CANVAS_CONFIG` 指向 config）
+- ✅ **macOS** —— Apple 日历同步走 osascript
+- ⚠️ Apple 日历同步仅限 macOS；其他系统等 Google Calendar 集成
 
-## 🔁 与上游同步
+## 🔁 跟上游同步
+
+仓库已配好 upstream 指向原作者，可随时拉新功能：
 
 ```bash
-# 本仓库已配好 upstream 指向原作者，可随时拉新功能
 git fetch upstream
 git merge upstream/main
 ```
 
 ## 🙏 致谢
 
-- [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas) — 本 fork 的上游，原始实现
-- [SJTU-Canvas-Helper](https://github.com/Okabe-Rintarou-0/SJTU-Canvas-Helper) — 上游灵感来源
-- [OpenClaw](https://github.com/openclaw/openclaw) — AI Agent 运行时
+- [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas) —— 本 fork 的上游，原始实现
+- [SJTU-Canvas-Helper](https://github.com/Okabe-Rintarou-0/SJTU-Canvas-Helper) —— 上游灵感来源
 
 ## 📄 License
 

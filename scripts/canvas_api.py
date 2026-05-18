@@ -18,7 +18,6 @@ def _find_config():
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
         os.path.expanduser("~/.claude/skills/sjtu-canvas/config.json"),
         os.path.expanduser("~/Desktop/sjtu-canvas/config.json"),
-        os.path.expanduser("~/.openclaw/workspace/skills/sjtu-canvas/config.json"),
     ]
     for p in candidates:
         if not p:

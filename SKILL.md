@@ -64,7 +64,6 @@ pip3 install python-pptx pdfplumber requests
 3. 脚本同级 `config.json`
 4. `~/.claude/skills/sjtu-canvas/config.json`
 5. `~/Desktop/sjtu-canvas/config.json`
-6. `~/.openclaw/workspace/skills/sjtu-canvas/config.json`
 
 ### canvas_api.py — Canvas API 交互
 
