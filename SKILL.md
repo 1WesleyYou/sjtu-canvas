@@ -241,11 +241,37 @@ ECE4500: Step 1 Project preference form by 11:59am, May 15
 2. `file_extractor.extract_file()` 提取文本
 3. 用 LLM 总结要点
 
-### 4. 作业辅导
+### 4. 作业辅导 / 准备工作流
 
-1. `get_assignment()` 获取作业要求
-2. 下载相关课件并提取内容
-3. 结合作业要求和课件，给出解题思路
+**触发场景**: 用户说"帮我准备 X 课的 Assignment N"、"用 Canvas 资料完成这次作业"、"把 X 作业相关课件下载下来"等。
+
+**两阶段**:
+
+#### Phase 1 — 确定性下载 + 提取(用脚本一键完成)
+
+```bash
+python3 scripts/prep_assignment.py <course_keyword> "<assignment_keyword>" [--workspace DIR]
+
+# 例:
+python3 scripts/prep_assignment.py ME335 "Assignment 1"
+```
+
+脚本会:定位课程 → 定位作业 → 列文件并按 syllabus/assignment/lecture/other 分类 → 建 `<workspace>/<course_short>/` → 下载相关文件 → 批量提取 PDF 到 `_md/` → 输出 JSON summary。
+
+#### Phase 2 — LLM 分析(读 markdown 后产出)
+
+1. 解析 `_md/Assignment N.md` 拆解每道题(主题 / 公式 / 已知 / 求解)
+2. 解析每个 `_md/Lecture X.md` 建主题词表
+3. 输出**题目 → Lecture 映射表**
+4. 给**建议入手顺序**(从基础到综合)
+5. 写**题目难点提示**(易错点 / 单位陷阱 / 适用条件)
+6. 在工作区写 `NOTES.md` 留存
+7. 给用户简报(目录树 + 关键信息 + 映射表 + 建议)
+
+> 完整 workflow 文档: [workflows/assignment-prep.md](workflows/assignment-prep.md)
+> NOTES.md 模板、边界情况处理、与其他工作流的关系都在那里。
+
+**注意**: 如果作业已 `submitted=True`,**不要静默继续**,在简报中显著标注让用户确认是重做还是核对。
 
 ### 5. DDL 管理
 
