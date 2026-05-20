@@ -256,7 +256,11 @@ python3 scripts/prep_assignment.py <course_keyword> "<assignment_keyword>" [--wo
 python3 scripts/prep_assignment.py ME335 "Assignment 1"
 ```
 
-脚本会:定位课程 → 定位作业 → 列文件并按 syllabus/assignment/lecture/other 分类 → 建 `<workspace>/<course_short>/` → 下载相关文件 → 批量提取 PDF 到 `_md/` → 输出 JSON summary。
+脚本会:定位课程 → 定位作业 → 列文件并按 syllabus/assignment/lecture/other 分类 → 建 `<workspace>/<course_short>/` → 下载相关文件 → 批量提取 PDF 到 `_md/` → **生成 auto-hw 兼容的 `index.md`**(ASCII 树 + 一句话摘要) → 输出 JSON summary。
+
+#### 🔗 接力到 auto-hw 真正做作业
+
+Phase 1 跑完后,工作区已经是 [auto-hw](~/.claude/skills/auto-hw/SKILL.md) 期望的标准布局(KB root + index.md)。用户接着说"完成 Assignment 1"或 `/auto-hw`,会自动触发 auto-hw skill,它读 `index.md` 摘要 → 路由到 reflection / answer / report 子流程 → 解题 + 编译 PDF。
 
 #### Phase 2 — LLM 分析(读 markdown 后产出)
 

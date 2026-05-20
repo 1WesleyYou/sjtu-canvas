@@ -20,10 +20,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+# Slide footers like "5/10/2026 VM335 by Zhaoguang Wang 1" — common boilerplate
+# in lecture exports. Skip when summarizing.
+DATE_PREFIX_PATTERN = re.compile(r"^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from canvas_api import (
@@ -99,6 +104,76 @@ def categorize_file(filename: str) -> str:
     return "other"
 
 
+def auto_summarize(md_path: Path, max_chars: int = 80) -> str:
+    """Heuristic one-line summary from the first substantive markdown line.
+
+    Skips headings, very short lines, and common metadata patterns.
+    Returns '?' when nothing usable is found (auto-hw expects this).
+    """
+    if not md_path.exists():
+        return "?"
+    try:
+        text = md_path.read_text(encoding="utf-8")
+    except OSError:
+        return "?"
+    metadata_prefixes = (
+        "Page ", "Slide ", "Lecture ", "Date:", "Instructor:", "Email:", "Office hour",
+        "TA's office", "Teaching assistant",
+    )
+    bullet_prefixes = ("• ", "▪ ", "✓ ", "- ", "* ", "‒ ", "● ")
+    # Require >=30 chars to filter title-like lines ("Heat Transfer", course codes,
+    # author names). Real content lines are usually full sentences.
+    min_content_len = 30
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if len(line) < min_content_len:
+            continue
+        # strip leading bullet so metadata prefix detection works on real start
+        content = line
+        for b in bullet_prefixes:
+            if content.startswith(b):
+                content = content[len(b):].strip()
+                break
+        if any(content.startswith(p) for p in metadata_prefixes):
+            continue
+        if DATE_PREFIX_PATTERN.match(content):
+            continue
+        ellipsis = "…" if len(line) > max_chars else ""
+        return line[:max_chars] + ellipsis
+    return "?"
+
+
+def write_index(course_dir: Path, course_short: str, downloaded: list[dict[str, Any]], md_dir: Path) -> Path:
+    """Write an auto-hw-compatible index.md (ASCII pipe tree + per-file summaries).
+
+    Overwrites any existing index.md. Format documented in
+    `~/.claude/skills/auto-hw/SKILL.md` step 2.
+    """
+    has_md_dir = md_dir.exists() and any(md_dir.iterdir())
+    lines: list[str] = [f"# {course_short.lower()}", ""]
+    n_root = len(downloaded)
+    for i, d in enumerate(downloaded):
+        is_last_root = (i == n_root - 1) and not has_md_dir
+        prefix = "└──" if is_last_root else "├──"
+        md_candidate = md_dir / (Path(d["name"]).stem + ".md")
+        summary = auto_summarize(md_candidate)
+        lines.append(f"{prefix} {d['name']} — {summary}")
+    if has_md_dir:
+        lines.append("└── _md/")
+        md_files = sorted(p for p in md_dir.iterdir() if p.suffix == ".md")
+        n_md = len(md_files)
+        for j, p in enumerate(md_files):
+            is_last = j == n_md - 1
+            md_prefix = "    └──" if is_last else "    ├──"
+            summary = auto_summarize(p)
+            lines.append(f"{md_prefix} {p.name} — {summary}")
+    index_path = course_dir / "index.md"
+    index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return index_path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -172,6 +247,10 @@ def main() -> None:
         extracted.append(str(md_path))
         print(f"  ✓ {md_path.name}")
 
+    print("🗂️  Writing auto-hw-compatible index.md ...")
+    index_path = write_index(course_dir, course.short, downloaded, md_dir)
+    print(f"  ✓ {index_path}")
+
     summary = {
         "course": {"id": course.id, "name": course.name, "short": course.short},
         "assignment": {
@@ -183,11 +262,13 @@ def main() -> None:
         "workspace": str(course_dir),
         "downloaded": downloaded,
         "extracted_md": extracted,
+        "index_md": str(index_path),
     }
 
     print()
     print("=" * 60)
     print("✅ READY — next step is LLM analysis (see workflows/assignment-prep.md)")
+    print("   or hand off to auto-hw skill for actual problem solving.")
     print("=" * 60)
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 

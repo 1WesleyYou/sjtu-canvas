@@ -43,7 +43,10 @@ python3 scripts/prep_assignment.py <course> "<assignment>" [--workspace DIR]
 5. **建目录**: `<workspace>/<course_short>/` 和 `_md/` 子目录
 6. **下载所有相关文件**
 7. **批量提取 PDF → markdown** 到 `_md/`
-8. **输出 JSON summary**(供 LLM 链式消费)
+8. **生成 auto-hw 兼容的 `index.md`** —— ASCII 管道树 + 每文件启发式摘要(取首条 >=30 字、非 metadata、非日期/页脚的内容行)
+9. **输出 JSON summary**(供 LLM 链式消费,含 `index_md` 字段)
+
+> Phase 1 完成后工作区结构就是 [auto-hw](~/.claude/skills/auto-hw/SKILL.md) 期望的标准 KB root 布局,可直接被 auto-hw 接管做题。
 
 ### Phase 2: LLM 判断部分(Claude 读取 markdown 后产出)
 
