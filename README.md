@@ -33,6 +33,7 @@
 | 💬 **讨论区摘要** | 抓课程讨论区内容 |
 | 🚀 **提交作业** | 命令行直接交（已修 upstream 的 SyntaxError） |
 | 📦 **复习包** | 批量导出所有课件为 Markdown，导入 NotebookLM / Obsidian 复习 |
+| 🤖 **AI 解题 + 质检 pipeline**（via `skills/auto-hw`） | N 个 opus sub-agent 并行解题 → LaTeX 编译 → 3 reviewer 严格质检（逻辑 / 公式出处 / 算术-单位-\boxed）→ loop-back fix → ✅ APPROVED PDF。详见 [`skills/auto-hw/SKILL.md`](skills/auto-hw/SKILL.md) |
 
 ## 🛣️ Roadmap
 
@@ -41,6 +42,8 @@
 | Apple Calendar（macOS，osascript） | ✅ shipped |
 | Claude Code skill 加载 | ✅ shipped |
 | OpenCode 兼容（via `$SJTU_CANVAS_CONFIG`） | ✅ 已兼容 |
+| AI 解题 + 质检 pipeline（`skills/auto-hw`） | ✅ shipped |
+| `prep_assignment.py` → `index.md` → auto-hw 衔接 | ✅ shipped |
 | Google Calendar API 同步 | 🚧 设计中 |
 | Notion DB 自动同步（via MCP） | 🚧 设计中 |
 | Obsidian Daily Note 注入 | 🚧 设计中 |
@@ -192,11 +195,20 @@ sjtu-canvas/
 ├── LICENSE
 ├── state/                # Agent memory（gitignored）
 │   └── memory.json
-└── scripts/
-    ├── canvas_api.py     # Canvas API 核心 + activity/syllabus/recent/sync
-    ├── state.py          # Agent memory: load/save/merge/mark
-    ├── file_extractor.py # PPT/PDF/DOCX → Markdown
-    └── calendar_sync.py  # DDL → Apple Calendar（macOS）
+├── scripts/
+│   ├── canvas_api.py     # Canvas API 核心 + activity/syllabus/recent/sync
+│   ├── state.py          # Agent memory: load/save/merge/mark
+│   ├── file_extractor.py # PPT/PDF/DOCX → Markdown
+│   ├── calendar_sync.py  # DDL → Apple Calendar（macOS）
+│   └── prep_assignment.py# Canvas → KB root + index.md (衔接 auto-hw)
+└── skills/
+    └── auto-hw/          # AI 解题 + 3-reviewer 质检 (forked from FishfishCai)
+        ├── SKILL.md      # 主流程 7 步
+        ├── answer.md     # 答题子流程 + 解题 prompt 模板
+        ├── reviewer.md   # 质检 + 3 reviewer + fix prompt 模板
+        ├── reflection.md / report.md / make-index.md
+        ├── tex-standard.md
+        └── scripts/build_pdf.py  # 一行 MD→TeX→PDF
 ```
 
 ## 🎓 兼容性
@@ -218,8 +230,9 @@ git merge upstream/main
 
 ## 🙏 致谢
 
-- [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas) —— 本 fork 的上游，原始实现
+- [xhh678876/sjtu-canvas](https://github.com/xhh678876/sjtu-canvas) —— 本 fork 的上游，原始 Canvas LMS 实现
 - [SJTU-Canvas-Helper](https://github.com/Okabe-Rintarou-0/SJTU-Canvas-Helper) —— 上游灵感来源
+- [FishfishCai/claude-config](https://github.com/FishfishCai/claude-config) —— `skills/auto-hw/` 的 SKILL.md / make-index.md / answer.md / reflection.md / report.md / tex-standard.md 框架来自这里;本仓库的 `reviewer.md` + `scripts/build_pdf.py` + prompt 模板扩展是本 fork 新增
 
 ## 📄 License
 
