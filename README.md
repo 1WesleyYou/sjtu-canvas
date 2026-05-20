@@ -35,6 +35,23 @@
 | 📦 **复习包** | 批量导出所有课件为 Markdown，导入 NotebookLM / Obsidian 复习 |
 | 🤖 **AI 解题 + 质检 pipeline**（via `skills/auto-hw`） | N 个 opus sub-agent 并行解题 → LaTeX 编译 → 3 reviewer 严格质检（逻辑 / 公式出处 / 算术-单位-\boxed）→ loop-back fix → ✅ APPROVED PDF。详见 [`skills/auto-hw/SKILL.md`](skills/auto-hw/SKILL.md) |
 
+## 🤖 自动完成作业架构
+
+![auto-hw pipeline architecture](docs/architecture.png)
+
+一句话 `做 ME335 HW1` 触发,4 stages 自动跑完:
+
+| Stage | 干啥 | 产物 |
+|---|---|---|
+| **🧭 1. PREPARE MATERIAL** | `prep_assignment.py` 跑 Canvas API 拉课程文件 → `file_extractor` 提 PDF → 生成 ASCII 树 `index.md` | KB root + `index.md`(auto-hw 兼容格式) |
+| **🤖 2. ANSWER GEN** | auto-hw skill 读 `index.md` 分类作业类型 → 派 **N 个 opus sub-agent 并行解题**(每个只看相关 lecture)→ 主 controller 装配 → `build_pdf.py` 一行编译 | `hw{N}_answer.md` + `.tex` + `.pdf` |
+| **🔍 3. REVIEW** | 3 个 reviewer **并行**严格质检:R1 逻辑链 / R2 公式出处 + 符号一致性 / R3 算术 + 单位 + `\boxed` 格式 → Aggregator 聚合 + double-track verdict | `hw{N}_review.md` |
+| **🔁 4. LOOP-BACK + FINAL** | ✅ 全过 → 输出 PDF;⚠️ 有 issue → 派 **fix sub-agents** 重做问题题目 → 重新走 Stage 2-3 直到 ✅ | `✅ APPROVED hw{N}_answer.pdf` |
+
+**实测端到端 ~3-4 分钟** (ME335 Assignment 1: 5 题 opus 并行解题 13s + 3 reviewer 并行 50s + loop-back fix 55s + 重 review 50s)。
+
+> 详细 prompt 模板 / 符号陷阱清单 / verdict 规则见 [`skills/auto-hw/reviewer.md`](skills/auto-hw/reviewer.md)。
+
 ## 🛣️ Roadmap
 
 | 集成 | 状态 |
